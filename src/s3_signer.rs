@@ -17,7 +17,11 @@ impl<'s> Signer<'s> {
     }
 
     #[inline]
-    pub fn sign(&self, date: DateTime<Utc>, string_to_sign: &str) -> Result<String, InvalidKeyLength> {
+    pub fn sign(
+        &self,
+        date: DateTime<Utc>,
+        string_to_sign: &str,
+    ) -> Result<String, InvalidKeyLength> {
         let mut key = self.signing_hasher(date)?;
         key.update(string_to_sign.as_bytes());
         let msg = key.finalize().into_bytes();
