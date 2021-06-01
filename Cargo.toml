@@ -1,0 +1,25 @@
+[package]
+name = "simple-aws-s3"
+version = "0.1.0"
+authors = ["Rodgers <cptrodgers@gmail.com>"]
+edition = "2018"
+description = "Simple way to work with AWS S3"
+repository = "https://github.com/cptrodgers/simple-aws-s3"
+license = "MIT OR Apache-2.0"
+keywords = ["aws", "s3", "request", "storage"]
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "simple_aws_s3"
+
+
+[dependencies]
+chrono = "0.4"
+hmac = "0.11.0"
+sha2 = "0.9.0"
+base64 = "0.13.0"
+hex = "0.4.3"
