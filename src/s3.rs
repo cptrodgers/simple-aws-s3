@@ -5,12 +5,12 @@ use hmac::crypto_mac::InvalidKeyLength;
 use reqwest::{Method, Request, Url};
 
 use crate::s3_constant::*;
-use crate::{CanonicalRequest, Policy, Signer, StringToSignType};
+use crate::{AuthRequestType, CanonicalRequest, Policy, Signer};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PostPresignedInfo {
     pub upload_url: String,
-    pub fields: HashMap<String, String>,
+    pub params: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -77,7 +77,7 @@ impl S3 {
     }
 
     #[inline]
-    pub fn generate_post_presigned(
+    pub fn generate_presigned_post(
         &self,
         key: String,
         content_type: &str,
@@ -102,7 +102,7 @@ impl S3 {
 
         // Calculate Policy, and Signature
         let policy = Policy::init(expire_on, &self.bucket, (0, content_length + 10), &fields);
-        let string_to_sign = StringToSignType::new_post_presigned(&policy).string_to_sign();
+        let string_to_sign = AuthRequestType::new_post_presigned(&policy).string_to_sign();
         let signature = self.signer().sign(now, &string_to_sign)?;
 
         fields.insert("policy".into(), string_to_sign);
@@ -110,7 +110,7 @@ impl S3 {
 
         Ok(PostPresignedInfo {
             upload_url: self.private_url(),
-            fields,
+            params: fields,
         })
     }
 
@@ -144,7 +144,7 @@ impl S3 {
 
         // Step 2: Calculate Signature and add to url query
         let string_to_sign =
-            StringToSignType::new_query_param_presigned(&req, self.region.as_str(), now)
+            AuthRequestType::new_query_param_presigned(&req, self.region.as_str(), now)
                 .string_to_sign();
         let sign = self.signer().sign(now, &string_to_sign)?;
         req.url_mut()
@@ -176,7 +176,7 @@ impl S3 {
 
         let signed_headers = req.signed_header();
         let string_to_sign =
-            StringToSignType::new_authorization_header(&req, self.region.as_str(), now)
+            AuthRequestType::new_authorization_header(&req, self.region.as_str(), now)
                 .string_to_sign();
         let sign = self.signer().sign(now, &string_to_sign)?;
         let authorization = self.format_authorization(signed_headers, sign, now);

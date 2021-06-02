@@ -5,14 +5,28 @@ use sha2::{Digest, Sha256};
 use crate::s3_constant::S3_ALGO_VALUE;
 use crate::Policy;
 
+/// Authentication Type of Request.
+///
+/// Ref: https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
 #[derive(Debug, Clone)]
-pub enum StringToSignType<'a> {
+pub enum AuthRequestType<'a> {
+    /// Use Authorization Header in Request. The famous authentication type of AWS S3 Rest APIs
+    ///
+    /// Ref: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html
     AuthorizationHeader((&'a Request, &'a str, DateTime<Utc>)),
-    QueryParamsPresigned((&'a Request, &'a str, DateTime<Utc>)),
-    PostUploadPresigned(&'a Policy),
+    /// Use Query Params. This authentication type can support delegating the download permisison of an object
+    /// for client
+    ///
+    /// Ref: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+    QueryParams((&'a Request, &'a str, DateTime<Utc>)),
+    /// Post Requests. This authentication type support delegating the upload permission of an object
+    /// to client
+    ///
+    /// Ref: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-authentication-HTTPPOST.html
+    PostRequest(&'a Policy),
 }
 
-impl<'a> StringToSignType<'a> {
+impl<'a> AuthRequestType<'a> {
     pub fn new_authorization_header(
         req: &'a Request,
         region: &'a str,
@@ -26,22 +40,22 @@ impl<'a> StringToSignType<'a> {
         region: &'a str,
         date: DateTime<Utc>,
     ) -> Self {
-        Self::QueryParamsPresigned((req, region, date))
+        Self::QueryParams((req, region, date))
     }
 
     pub fn new_post_presigned(policy: &'a Policy) -> Self {
-        Self::PostUploadPresigned(policy)
+        Self::PostRequest(policy)
     }
 
     pub fn string_to_sign(self) -> String {
         match self {
-            StringToSignType::AuthorizationHeader((req, region, date)) => {
+            AuthRequestType::AuthorizationHeader((req, region, date)) => {
                 string_to_sign(req.canonical_hex(true), region, date)
             }
-            StringToSignType::QueryParamsPresigned((req, region, date)) => {
+            AuthRequestType::QueryParams((req, region, date)) => {
                 string_to_sign(req.canonical_hex(false), region, date)
             }
-            StringToSignType::PostUploadPresigned(policy) => policy.encode(),
+            AuthRequestType::PostRequest(policy) => policy.encode(),
         }
     }
 }
