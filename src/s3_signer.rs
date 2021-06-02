@@ -5,6 +5,7 @@ use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
+#[derive(Debug, Clone)]
 pub struct Signer<'s> {
     secret_key: &'s str,
     region: &'s str,

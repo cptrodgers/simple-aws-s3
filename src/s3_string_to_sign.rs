@@ -2,17 +2,37 @@ use chrono::{DateTime, Utc};
 use reqwest::Request;
 use sha2::{Digest, Sha256};
 
-use crate::constant::S3_ALGO_VALUE;
+use crate::s3_constant::S3_ALGO_VALUE;
 use crate::Policy;
 
 #[derive(Debug, Clone)]
 pub enum StringToSignType<'a> {
     AuthorizationHeader((&'a Request, &'a str, DateTime<Utc>)),
     QueryParamsPresigned((&'a Request, &'a str, DateTime<Utc>)),
-    PostUploadPresigned(Policy),
+    PostUploadPresigned(&'a Policy),
 }
 
-impl StringToSignType<'_> {
+impl<'a> StringToSignType<'a> {
+    pub fn new_authorization_header(
+        req: &'a Request,
+        region: &'a str,
+        date: DateTime<Utc>,
+    ) -> Self {
+        Self::AuthorizationHeader((req, region, date))
+    }
+
+    pub fn new_query_param_presigned(
+        req: &'a Request,
+        region: &'a str,
+        date: DateTime<Utc>,
+    ) -> Self {
+        Self::QueryParamsPresigned((req, region, date))
+    }
+
+    pub fn new_post_presigned(policy: &'a Policy) -> Self {
+        Self::PostUploadPresigned(policy)
+    }
+
     pub fn string_to_sign(self) -> String {
         match self {
             StringToSignType::AuthorizationHeader((req, region, date)) => {
