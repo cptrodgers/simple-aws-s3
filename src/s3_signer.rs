@@ -5,6 +5,31 @@ use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// Signer Aws Sign V4
+///
+/// Ref: https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html#signing-request-intro
+///
+/// Example:
+/// ```rust
+/// use simple_aws_s3::Signer;
+/// use chrono::{Utc, DateTime, TimeZone};
+///
+/// const SECRET_KEY: &str = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+/// const REGION: &str = "us-east-1";
+///
+/// let date = Utc.ymd(2013, 5, 24).and_hms(0, 0, 0);
+/// let string_to_sign = r#"AWS4-HMAC-SHA256
+/// 20130524T000000Z
+/// 20130524/us-east-1/s3/aws4_request
+/// 7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972"#;
+///
+/// let expected_signature = "f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41";
+///
+/// let signer = Signer::new(SECRET_KEY, REGION);
+/// let signature = signer.sign(date, string_to_sign).unwrap();
+///
+/// assert_eq!(signature, expected_signature);
+/// ```
 #[derive(Debug, Clone)]
 pub struct Signer<'s> {
     secret_key: &'s str,

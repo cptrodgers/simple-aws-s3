@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Rodgers <cptrodgers@gmail.com>"]
 edition = "2018"
 description = "Simple way to work with AWS S3"
+readme = "README.md"
 repository = "https://github.com/cptrodgers/simple-aws-s3"
 license = "MIT OR Apache-2.0"
 keywords = ["aws", "s3", "request", "storage"]
