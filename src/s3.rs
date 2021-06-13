@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 use hmac::crypto_mac::InvalidKeyLength;
-use reqwest::{Method, Request, Url};
+use reqwest::{Client, Method, Request, Response, Url};
 
+use crate::error::Error;
 use crate::s3_constant::*;
 use crate::{AuthRequestType, CanonicalRequest, Policy, Signer};
 
@@ -34,7 +35,6 @@ pub struct PostPresignedInfo {
 ///     SECRET_KEY,
 /// );
 ///
-/// // Generate Presigned Post for file name example.png, content type image/png, maximum 10mbs, expire link on 1 hour, and no acl
 /// let res = s3.generate_presigned_post("example.png".into(), "image/png", 10485760, Duration::seconds(3600), None).unwrap();
 /// assert_eq!(res.upload_url, "https://us-east-1.s3.amazonaws.com/examplebucket");
 /// assert!(res.params.contains_key("policy"));
@@ -44,19 +44,18 @@ pub struct PostPresignedInfo {
 /// assert!(!res.params.contains_key("acl"));
 ///
 /// // Generate Presigned Get: Link to download example.png, expire ons 1 hour
-/// let download_request = s3.generate_presigned_get("example.png", 3600).unwrap();
-/// // let res = reqwest::Client::new().execute(download_request);
+/// let download_url = s3.generate_presigned_get("example.png", 3600).unwrap();
+/// println!("URL to download: {}", download_url);
 ///
-/// // Get Information of Object
-/// let head_req = s3.head_object("example.png").unwrap();
-/// // let res = reqwest::Client::new().execute(head_req);
+/// // Get information of an object
+/// let head_req = s3.head_object("example.png").await?;
 ///
-/// // Delete Object
-/// let delete_req = s3.delete_object("example.png").unwrap();
-/// // let res = reqwest::Client::new().execute(delete_req);
+/// // Delete an object
+/// let delete_req = s3.delete_object("example.png").await?;
 /// ```
 #[derive(Debug, Clone)]
 pub struct S3 {
+    client: Client,
     bucket: String,
     region: String,
     endpoint: String,
@@ -80,6 +79,7 @@ impl S3 {
         let secret_key = secret_key.into();
 
         Self {
+            client: Client::new(),
             bucket,
             region,
             endpoint,
@@ -109,13 +109,49 @@ impl S3 {
     }
 
     #[inline]
-    pub fn head_object(&self, key: &str) -> Result<Request, InvalidKeyLength> {
-        self.prepare_simple_object_method(key, Method::HEAD)
+    pub async fn head_object(&self, key: &str) -> Result<Response, Error> {
+        let req = self.prepare_simple_object_method(key, Method::HEAD)?;
+        let res = self.client.execute(req).await?;
+        Ok(res)
     }
 
     #[inline]
-    pub fn delete_object(&self, key: &str) -> Result<Request, InvalidKeyLength> {
-        self.prepare_simple_object_method(key, Method::DELETE)
+    pub async fn delete_object(&self, key: &str) -> Result<Response, Error> {
+        let req = self.prepare_simple_object_method(key, Method::DELETE)?;
+        let res = self.client.execute(req).await?;
+        Ok(res)
+    }
+
+    #[inline]
+    pub fn prepare_simple_object_method(
+        &self,
+        key: &str,
+        method: Method,
+    ) -> Result<Request, InvalidKeyLength> {
+        let now = Utc::now();
+        let formatted_now = now.format("%Y%m%dT%H%M%SZ").to_string();
+
+        let url = Url::parse(&format!("{}/{}", self.public_url(), key)).unwrap();
+        let host = url.host().unwrap().to_string();
+
+        let mut req = Request::new(method, url);
+        let payload = req.payload_hex();
+
+        let headers_mut = req.headers_mut();
+        headers_mut.insert("host", host.as_str().parse().unwrap());
+        headers_mut.insert(S3_CONTENT_KEY, payload.as_str().parse().unwrap());
+        headers_mut.insert(S3_DATE_KEY, formatted_now.as_str().parse().unwrap());
+
+        let signed_headers = req.signed_header();
+        let string_to_sign =
+            AuthRequestType::new_authorization_header(&req, self.region.as_str(), now)
+                .string_to_sign();
+        let sign = self.signer().sign(now, &string_to_sign)?;
+        let authorization = self.format_authorization(signed_headers, sign, now);
+        req.headers_mut()
+            .insert("Authorization", authorization.as_str().parse().unwrap());
+
+        Ok(req)
     }
 
     #[inline]
@@ -157,11 +193,7 @@ impl S3 {
     }
 
     #[inline]
-    pub fn generate_presigned_get(
-        &self,
-        key: &str,
-        expires_on: i32,
-    ) -> Result<Request, InvalidKeyLength> {
+    pub fn generate_presigned_get(&self, key: &str, expires_on: i32) -> Result<String, Error> {
         let now = Utc::now();
         let formatted_now = now.format("%Y%m%dT%H%M%SZ").to_string();
 
@@ -193,39 +225,7 @@ impl S3 {
             .query_pairs_mut()
             .append_pair(S3_SIGNATURE_KEY, &sign);
 
-        Ok(req)
-    }
-
-    #[inline]
-    pub fn prepare_simple_object_method(
-        &self,
-        key: &str,
-        method: Method,
-    ) -> Result<Request, InvalidKeyLength> {
-        let now = Utc::now();
-        let formatted_now = now.format("%Y%m%dT%H%M%SZ").to_string();
-
-        let url = Url::parse(&format!("{}/{}", self.public_url(), key)).unwrap();
-        let host = url.host().unwrap().to_string();
-
-        let mut req = Request::new(method, url);
-        let payload = req.payload_hex();
-
-        let headers_mut = req.headers_mut();
-        headers_mut.insert("host", host.as_str().parse().unwrap());
-        headers_mut.insert(S3_CONTENT_KEY, payload.as_str().parse().unwrap());
-        headers_mut.insert(S3_DATE_KEY, formatted_now.as_str().parse().unwrap());
-
-        let signed_headers = req.signed_header();
-        let string_to_sign =
-            AuthRequestType::new_authorization_header(&req, self.region.as_str(), now)
-                .string_to_sign();
-        let sign = self.signer().sign(now, &string_to_sign)?;
-        let authorization = self.format_authorization(signed_headers, sign, now);
-        req.headers_mut()
-            .insert("Authorization", authorization.as_str().parse().unwrap());
-
-        Ok(req)
+        Ok(req.url().to_string())
     }
 
     #[inline]
