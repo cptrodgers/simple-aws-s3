@@ -920,7 +920,7 @@ dependencies = [
 
 [[package]]
 name = "simple-aws-s3"
-version = "0.2.0"
+version = "0.2.1-alpha.0"
 dependencies = [
  "base64",
  "chrono",
