@@ -1,74 +1,71 @@
 //! # Simple AWS S3
-//! Provides the simple way to work with AWS S3.
+//! Provides the simple way to work with AWS S3. It use reqwest to execute the reqwest.
 //!
 //! This package is developing while waiting the fully supported from [aws-sdk](https://github.com/awslabs/aws-sdk-rust) from Amazon.
+//! ### Features:
 //!
-//! ### Signer (aws sig v4)
-//! We support `aws-sig-v4` feature that you can take signature from your request.
+//! + Post Presigned (Upload from browser)
+//! + Get Presigned (Download from browser)
+//! + Bucket Operations:
+//! + Object Operations:
+//!     + Head Object (Retrieve Information of an Object)
+//!     + Delete Object
 //!
-//! ```rust
-//! use simple_aws_s3::Signer;
-//! use chrono::{Utc, DateTime, TimeZone};
-//!
-//! const SECRET_KEY: &str = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
-//! const REGION: &str = "us-east-1";
-//!
-//! fn main() {
-//!     let date = Utc.ymd(2013, 5, 24).and_hms(0, 0, 0);
-//!     let string_to_sign = r#"AWS4-HMAC-SHA256
-//! 20130524T000000Z
-//! 20130524/us-east-1/s3/aws4_request
-//! 7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972"#;
-//!
-//!     let signer = Signer::new(SECRET_KEY, REGION);
-//!     let signature = signer.sign(date, string_to_sign).unwrap();
-//! }
-//! ```
-//!
-//! ### S3 Features
-//! You can generate upload information and send it for your client (for example: browser) to upload file directly to S3.
-//!
-//! ```rust
-//! use simple_aws_s3::*;
+//! ### Examples:
 //! use chrono::Duration;
+//! use reqwest::multipart::{Form, Part};
+//! use reqwest::StatusCode;
+//! use simple_aws_s3::{PostPresignedInfo, S3};
 //!
+//! // Before run this example, please replace s3 config below by your config.
 //! const ACCESS_KEY: &str = "AKIAIOSFODNN7EXAMPLE";
 //! const SECRET_KEY: &str = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
 //! const REGION: &str = "us-east-1";
 //! const ENDPOINT: &str = "s3.amazonaws.com";
 //! const BUCKET: &str = "examplebucket";
 //!
-//! fn main() {
-//!     let s3 = S3::new(
-//!         BUCKET,
-//!         REGION,
-//!         ENDPOINT,
-//!         ACCESS_KEY,
-//!         SECRET_KEY,
-//!     );
+//! #[tokio::main]
+//! async fn main() {
+//!     let s3 = S3::new(BUCKET, REGION, ENDPOINT, ACCESS_KEY, SECRET_KEY);
 //!
-//!     // Generate Presigned Post for file name example.png, content type image/png, maximum 10mbs, expire link on 1 hour, and no acl
-//!     let res = s3.generate_presigned_post("example.png".into(), "image/png", 10485760, Duration::seconds(3600), None).unwrap();
-//!     assert_eq!(res.upload_url, "https://us-east-1.s3.amazonaws.com/examplebucket");
-//!     assert!(res.params.contains_key("policy"));
-//!     assert!(res.params.contains_key(S3_CRED_KEY));
-//!     assert!(res.params.contains_key(S3_DATE_KEY));
-//!     assert!(res.params.contains_key(S3_SIGNATURE_KEY));
-//!     assert!(!res.params.contains_key("acl"));
+//!     let key = String::from("text.txt");
+//!     let content = "Hello world";
 //!
-//!     // Generate Presigned Get: Link to download example.png, expire ons 1 hour
-//!     let download_request = s3.generate_presigned_get("example.png", 3600).unwrap();
-//!     // let res = reqwest::Client::new().execute(download_request);
+//!     // Upload by Post Presigned
+//!     let PostPresignedInfo { upload_url, params } = s3
+//!         .generate_presigned_post(
+//!             key.clone(),
+//!             "plain/text",
+//!             10485760,
+//!             Duration::seconds(3600),
+//!             None,
+//!         )
+//!         .unwrap();
+//!     let mut form = Form::new();
+//!     for (key, value) in params {
+//!         form = form.text(key, value);
+//!     }
+//!     let part = Part::text(content).mime_str("plain/text").unwrap();
+//!     form = form.part("file", part);
+//!     let res = reqwest::Client::new()
+//!         .post(&upload_url)
+//!         .multipart(form)
+//!         .send()
+//!         .await
+//!         .unwrap();
+//!     assert_eq!(res.status(), StatusCode::NO_CONTENT);
 //!
-//!     // Get Information of Object
-//!     let head_req = s3.head_object("example.png").unwrap();
-//!     // let res = reqwest::Client::new().execute(head_req);
-//!
-//!     // Delete Object
-//!     let delete_req = s3.delete_object("example.png").unwrap();
-//!     // let res = reqwest::Client::new().execute(delete_req);
-//!
+//!     // Download by Query Param (Get Presigned)
+//!     let download_url = s3.generate_presigned_get(&key, 3600).unwrap();
+//!     let res = reqwest::Client::new()
+//!         .get(&download_url)
+//!         .send()
+//!         .await
+//!         .unwrap();
+//!     assert_eq!(res.status(), StatusCode::OK);
+//!     assert_eq!(res.text().await.unwrap(), content);
 //! }
+//! + [Upload/Download](https://github.com/cptrodgers/simple-aws-s3/tree/master/examples)
 //! ```
 
 #[macro_use]
