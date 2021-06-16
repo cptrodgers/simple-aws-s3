@@ -89,21 +89,10 @@ impl S3 {
     }
 
     #[inline]
-    pub fn private_url(&self) -> String {
+    pub fn bucket_url(&self) -> String {
         format!(
-            "https://{region}.{endpoint}/{bucket}",
-            region = self.region,
+            "https://{bucket}.{endpoint}",
             bucket = self.bucket,
-            endpoint = self.endpoint,
-        )
-    }
-
-    #[inline]
-    pub fn public_url(&self) -> String {
-        format!(
-            "https://{bucket}.{region}.{endpoint}",
-            bucket = self.bucket,
-            region = self.region,
             endpoint = self.endpoint,
         )
     }
@@ -131,7 +120,7 @@ impl S3 {
         let now = Utc::now();
         let formatted_now = now.format("%Y%m%dT%H%M%SZ").to_string();
 
-        let url = Url::parse(&format!("{}/{}", self.public_url(), key)).unwrap();
+        let url = Url::parse(&format!("{}/{}", self.bucket_url(), key)).unwrap();
         let host = url.host().unwrap().to_string();
 
         let mut req = Request::new(method, url);
@@ -187,7 +176,7 @@ impl S3 {
         fields.insert(S3_SIGNATURE_KEY.into(), signature);
 
         Ok(PostPresignedInfo {
-            upload_url: self.private_url(),
+            upload_url: self.bucket_url(),
             params: fields,
         })
     }
@@ -200,7 +189,7 @@ impl S3 {
         // Step 1: Prepare the request and query parameters
         let mut url = Url::parse(&format!(
             "{public_url}/{key}",
-            public_url = self.public_url(),
+            public_url = self.bucket_url(),
             key = key,
         ))
         .unwrap();
