@@ -1,6 +1,6 @@
 [package]
 name = "simple-aws-s3"
-version = "0.2.1-alpha.0"
+version = "0.2.1"
 authors = ["Rodgers <cptrodgers@gmail.com>"]
 edition = "2018"
 description = "Simple way to work with AWS S3"
